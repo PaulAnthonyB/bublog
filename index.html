@@ -21,13 +21,16 @@
   .event-btn{padding:16px;font-size:16px;font-weight:600;border:0;border-radius:12px;color:white;background:#7c3aed;-webkit-tap-highlight-color:transparent}
   .event-btn.wee{background:#0891b2}
   .card{background:white;border-radius:14px;padding:12px;margin-top:8px}
-  .row{padding:8px 0;border-bottom:1px solid #eee;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .row{padding:8px 0;border-bottom:1px solid #eee;font-size:14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .row:last-child{border:0}
+  .row-info{flex:1;min-width:0}
   .act{font-weight:600}
   .t{color:#666;font-size:12px}
-  .del{background:none;border:0;color:#dc2626;font-size:18px;padding:4px 8px}
-  .ctrl{display:flex;gap:8px;margin-top:14px}
-  .ctrl button{flex:1;padding:12px;font-size:14px;background:#8e8e93;color:white;border:0;border-radius:10px}
+  .icon-btn{background:none;border:0;font-size:18px;padding:6px 8px;color:#666;-webkit-tap-highlight-color:transparent}
+  .icon-btn.del{color:#dc2626}
+  .ctrl{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+  .ctrl button{flex:1;padding:12px;font-size:13px;background:#8e8e93;color:white;border:0;border-radius:10px;min-width:90px}
+  .ctrl button.primary{background:#2563eb}
   svg.chart{width:100%;height:auto;display:block}
   .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;margin-top:6px}
   .legend span{display:flex;align-items:center;gap:4px}
@@ -39,6 +42,19 @@
   .tabs{display:flex;background:#e5e7eb;border-radius:10px;padding:3px;margin-bottom:8px}
   .tabs button{flex:1;padding:8px;border:0;background:transparent;font-size:13px;font-weight:600;border-radius:7px;color:#666}
   .tabs button.on{background:white;color:#1c1c1e;box-shadow:0 1px 2px rgba(0,0,0,0.08)}
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+  .modal-bg.on{display:flex}
+  .modal{background:white;border-radius:16px;padding:18px;width:100%;max-width:380px;max-height:90vh;overflow:auto}
+  .modal h3{margin:0 0 14px;font-size:17px}
+  .modal label{display:block;font-size:12px;color:#666;margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+  .modal select, .modal input{width:100%;padding:10px;font-size:16px;border:1px solid #d1d5db;border-radius:8px;background:white;font-family:inherit}
+  .modal-actions{display:flex;gap:8px;margin-top:18px}
+  .modal-actions button{flex:1;padding:12px;border:0;border-radius:10px;font-size:15px;font-weight:600}
+  .modal-actions .cancel{background:#e5e7eb;color:#1c1c1e}
+  .modal-actions .save{background:#2563eb;color:white}
+  .modal-actions .del{background:#dc2626;color:white;flex:0 0 auto;padding:12px 14px}
+  .hint{font-size:11px;color:#999;margin-top:6px}
 </style>
 </head>
 <body>
@@ -70,8 +86,36 @@
 <div class="card" id="log"></div>
 
 <div class="ctrl">
+  <button class="primary" onclick="openAddModal()">+ Add entry</button>
   <button onclick="exportCSV()">Export CSV</button>
-  <button onclick="if(confirm('Clear ALL data?')){localStorage.clear();starts={};log=[];render();}">Clear all</button>
+  <button onclick="document.getElementById('importFile').click()">Import CSV</button>
+  <input type="file" id="importFile" accept=".csv,text/csv" style="display:none" onchange="importCSV(event)">
+</div>
+
+<!-- Edit / Add modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle">Edit entry</h3>
+    <label>Activity</label>
+    <select id="mActivity"></select>
+    <label>Type</label>
+    <select id="mType">
+      <option value="duration">Duration (start → end)</option>
+      <option value="event">Event (single time)</option>
+    </select>
+    <label>Start</label>
+    <input type="datetime-local" id="mStart">
+    <div id="endWrap">
+      <label>End</label>
+      <input type="datetime-local" id="mEnd">
+    </div>
+    <div class="hint" id="durHint"></div>
+    <div class="modal-actions">
+      <button class="cancel" onclick="closeModal()">Cancel</button>
+      <button class="del" id="mDelBtn" onclick="modalDelete()">🗑</button>
+      <button class="save" onclick="modalSave()">Save</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -86,14 +130,16 @@ const EVENTS = [
 ];
 const COLOR = Object.fromEntries([...TIMED,...EVENTS].map(x=>[x.id,x.color]));
 const ALL_ROWS = [...TIMED, ...EVENTS];
+const VALID_IDS = new Set(ALL_ROWS.map(r=>r.id));
 
 let starts = JSON.parse(localStorage.getItem("starts")||"{}");
 let log    = JSON.parse(localStorage.getItem("log")||"[]");
-let view   = "day"; // day | week | month
+let view   = "day";
 let anchor = startOfDay(Date.now());
+let editingIdx = null; // null = adding new
 
 function startOfDay(t){const d=new Date(t);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();}
-function startOfWeek(t){const d=new Date(startOfDay(t));const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.getTime();} // Mon start
+function startOfWeek(t){const d=new Date(startOfDay(t));const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.getTime();}
 function startOfMonth(t){const d=new Date(t);return new Date(d.getFullYear(),d.getMonth(),1).getTime();}
 function addDays(t,n){const d=new Date(t);d.setDate(d.getDate()+n);return d.getTime();}
 function addMonths(t,n){const d=new Date(t);d.setMonth(d.getMonth()+n);return d.getTime();}
@@ -103,6 +149,8 @@ function save(){
   localStorage.setItem("starts",JSON.stringify(starts));
   localStorage.setItem("log",JSON.stringify(log));
 }
+
+function sortLog(){ log.sort((a,b)=> a.start - b.start); }
 
 function setView(v){
   view = v;
@@ -124,6 +172,7 @@ function toggleTimer(id){
   if(starts[id]){
     log.push({activity:id,start:starts[id],end:Date.now(),type:"duration"});
     delete starts[id];
+    sortLog();
   } else {
     starts[id]=Date.now();
   }
@@ -133,11 +182,8 @@ function toggleTimer(id){
 function logEvent(id){
   const now = Date.now();
   log.push({activity:id,start:now,end:now,type:"event"});
+  sortLog();
   save(); render();
-}
-
-function deleteRow(idxInLog){
-  if(confirm("Delete this entry?")){ log.splice(idxInLog,1); save(); render(); }
 }
 
 function fmtTime(t){return new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
@@ -147,12 +193,112 @@ function fmtMonth(t){return new Date(t).toLocaleDateString([], {month:"long", ye
 function dur(a,b){const s=Math.floor((b-a)/1000);const m=Math.floor(s/60);return m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m ${s%60}s`;}
 function durShort(ms){const m=Math.floor(ms/60000);return m>=60?`${Math.floor(m/60)}h${m%60?` ${m%60}m`:''}`:`${m}m`;}
 
+// ---- Modal (edit / add) ----
+function tsToLocal(ts){
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localToTs(s){ return new Date(s).getTime(); }
+
+function populateActivities(){
+  document.getElementById("mActivity").innerHTML = ALL_ROWS.map(r=>
+    `<option value="${r.id}">${r.label}</option>`
+  ).join("");
+}
+
+function openModal(){
+  document.getElementById("modal").classList.add("on");
+  syncTypeUI();
+}
+
+function closeModal(){
+  document.getElementById("modal").classList.remove("on");
+  editingIdx = null;
+}
+
+function syncTypeUI(){
+  const type = document.getElementById("mType").value;
+  document.getElementById("endWrap").style.display = type==="event" ? "none" : "block";
+  updateDurHint();
+}
+
+function updateDurHint(){
+  const type = document.getElementById("mType").value;
+  if(type==="event"){ document.getElementById("durHint").textContent = ""; return; }
+  const a = localToTs(document.getElementById("mStart").value);
+  const b = localToTs(document.getElementById("mEnd").value);
+  if(!isNaN(a) && !isNaN(b) && b>a) document.getElementById("durHint").textContent = `Duration: ${dur(a,b)}`;
+  else document.getElementById("durHint").textContent = b<=a ? "End must be after start" : "";
+}
+
+function openEditModal(idx){
+  const s = log[idx];
+  if(!s) return;
+  editingIdx = idx;
+  populateActivities();
+  document.getElementById("modalTitle").textContent = "Edit entry";
+  document.getElementById("mActivity").value = s.activity;
+  document.getElementById("mType").value = s.type;
+  document.getElementById("mStart").value = tsToLocal(s.start);
+  document.getElementById("mEnd").value = tsToLocal(s.end);
+  document.getElementById("mDelBtn").style.display = "block";
+  openModal();
+}
+
+function openAddModal(){
+  editingIdx = null;
+  populateActivities();
+  document.getElementById("modalTitle").textContent = "Add entry";
+  document.getElementById("mActivity").value = "BreastL";
+  document.getElementById("mType").value = "duration";
+  const now = Date.now();
+  document.getElementById("mStart").value = tsToLocal(now - 10*60000);
+  document.getElementById("mEnd").value = tsToLocal(now);
+  document.getElementById("mDelBtn").style.display = "none";
+  openModal();
+}
+
+function modalSave(){
+  const activity = document.getElementById("mActivity").value;
+  const type = document.getElementById("mType").value;
+  const start = localToTs(document.getElementById("mStart").value);
+  if(isNaN(start)){ alert("Invalid start time"); return; }
+  let end = start;
+  if(type==="duration"){
+    end = localToTs(document.getElementById("mEnd").value);
+    if(isNaN(end) || end<=start){ alert("End must be after start"); return; }
+  }
+  const entry = {activity, type, start, end};
+  if(editingIdx===null) log.push(entry);
+  else log[editingIdx] = entry;
+  sortLog();
+  save(); closeModal(); render();
+}
+
+function modalDelete(){
+  if(editingIdx===null) return;
+  if(!confirm("Delete this entry?")) return;
+  log.splice(editingIdx,1);
+  save(); closeModal(); render();
+}
+
+document.addEventListener("change", e=>{
+  if(e.target.id==="mType") syncTypeUI();
+  if(e.target.id==="mStart" || e.target.id==="mEnd") updateDurHint();
+});
+document.getElementById("modal").addEventListener("click", e=>{
+  if(e.target.id==="modal") closeModal();
+});
+
+// ---- Render ----
 function renderTimers(){
   document.getElementById("timers").innerHTML = TIMED.map(t=>{
     const on = starts[t.id];
-    const label = on ? `Stop ${t.label}\n${dur(on,Date.now())}` : `Start ${t.label}`;
     const cls = on ? "active" : t.cls;
-    return `<button class="timer-btn ${cls}${t.full?' full':''}" onclick="toggleTimer('${t.id}')">${label.replace('\n','<br><span style=\"font-weight:400;font-size:13px\">')}${on?'</span>':''}</button>`;
+    const main = on ? `Stop ${t.label}` : `Start ${t.label}`;
+    const sub = on ? `<br><span style="font-weight:400;font-size:13px">${dur(on,Date.now())}</span>` : "";
+    return `<button class="timer-btn ${cls}${t.full?' full':''}" onclick="toggleTimer('${t.id}')">${main}${sub}</button>`;
   }).join("");
 }
 
@@ -186,7 +332,6 @@ function entriesInWindow(){
   return log.map((x,i)=>({s:x,i})).filter(({s:x})=> x.end >= s && x.start < e);
 }
 
-// Split a duration entry by day so per-day buckets are accurate
 function durationOnDay(entry, dayStart){
   const dayEnd = addDays(dayStart, 1);
   const a = Math.max(entry.start, dayStart);
@@ -251,8 +396,6 @@ function renderDayChart(svg){
   svg.innerHTML = html;
 }
 
-// Stacked bar chart: one bar per day. Top section = total feed minutes (L+R stacked) + nap minutes.
-// Below: event count dots.
 function renderRangeChart(svg, nDays){
   const W=700, padL=40, padR=10, padT=10, padB=40;
   const innerW = W-padL-padR;
@@ -261,7 +404,6 @@ function renderRangeChart(svg, nDays){
   const totalH = padT + barArea + eventArea + padB;
   svg.setAttribute("viewBox", `0 0 ${W} ${totalH}`);
 
-  // Build daily buckets
   const days = [];
   for(let i=0;i<nDays;i++){
     const dStart = addDays(anchor, i);
@@ -278,7 +420,6 @@ function renderRangeChart(svg, nDays){
     days.push(bucket);
   }
 
-  // Max duration for y-scale (in ms)
   const maxDur = Math.max(1, ...days.map(d=> d.BreastL + d.BreastR + d.Nap));
   const maxHours = Math.max(1, Math.ceil(maxDur/3600000));
   const yOf = ms => padT + barArea - (ms/(maxHours*3600000))*barArea;
@@ -288,8 +429,6 @@ function renderRangeChart(svg, nDays){
   const barOffset = (barW - innerBarW)/2;
 
   let html = "";
-
-  // Y gridlines (hours)
   const step = maxHours <= 4 ? 1 : maxHours <= 12 ? 2 : 4;
   for(let h=0; h<=maxHours; h+=step){
     const y = yOf(h*3600000);
@@ -297,7 +436,6 @@ function renderRangeChart(svg, nDays){
     html += `<text x="${padL-4}" y="${y+3}" font-size="9" text-anchor="end" fill="#666">${h}h</text>`;
   }
 
-  // Bars
   days.forEach((d,i)=>{
     const x = padL + i*barW + barOffset;
     let yCursor = padT + barArea;
@@ -308,7 +446,6 @@ function renderRangeChart(svg, nDays){
         html += `<rect x="${x}" y="${yCursor}" width="${innerBarW}" height="${h}" fill="${c}"/>`;
       }
     });
-    // x label
     const xc = padL + i*barW + barW/2;
     const lbl = view==="week"
       ? new Date(d.date).toLocaleDateString([], {weekday:"short"})
@@ -316,16 +453,12 @@ function renderRangeChart(svg, nDays){
     if(view==="week" || i%Math.ceil(nDays/15)===0){
       html += `<text x="${xc}" y="${padT+barArea+12}" font-size="9" text-anchor="middle" fill="#666">${lbl}</text>`;
     }
-    // event dots
     const evY = padT + barArea + 20;
-    const pooN = d.Poo, weeN = d.Wee;
-    if(pooN) html += `<circle cx="${xc-5}" cy="${evY}" r="3.5" fill="${COLOR.Poo}"/><text x="${xc-5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${pooN}</text>`;
-    if(weeN) html += `<circle cx="${xc+5}" cy="${evY}" r="3.5" fill="${COLOR.Wee}"/><text x="${xc+5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${weeN}</text>`;
+    if(d.Poo) html += `<circle cx="${xc-5}" cy="${evY}" r="3.5" fill="${COLOR.Poo}"/><text x="${xc-5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${d.Poo}</text>`;
+    if(d.Wee) html += `<circle cx="${xc+5}" cy="${evY}" r="3.5" fill="${COLOR.Wee}"/><text x="${xc+5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${d.Wee}</text>`;
   });
 
-  // Axis labels
   html += `<text x="${padL}" y="${totalH-4}" font-size="9" fill="#666">Bars: hours of feed (L+R) & nap · Dots: poo/wee counts</text>`;
-
   svg.innerHTML = html;
 }
 
@@ -343,8 +476,8 @@ function renderLog(){
       ? (showDate? `${fmtDateShort(s.start)} ${fmtTime(s.start)}` : fmtTime(s.start))
       : (showDate? `${fmtDateShort(s.start)} ${fmtTime(s.start)} → ${fmtTime(s.end)} (${dur(s.start,s.end)})` : `${fmtTime(s.start)} → ${fmtTime(s.end)} (${dur(s.start,s.end)})`);
     return `<div class="row">
-      <div><div class="act" style="color:${COLOR[s.activity]}">${s.activity}</div><div class="t">${when}</div></div>
-      <button class="del" onclick="deleteRow(${i})">✕</button>
+      <div class="row-info"><div class="act" style="color:${COLOR[s.activity]}">${s.activity}</div><div class="t">${when}</div></div>
+      <button class="icon-btn" onclick="openEditModal(${i})" aria-label="Edit">✎</button>
     </div>`;
   }).join("") : '<div class="t">No entries</div>';
 }
@@ -374,7 +507,6 @@ function renderSummary(){
   TIMED.forEach(t=>{ if(totals[t.id]) parts.push(`${t.label}: ${durShort(totals[t.id])}`); });
   EVENTS.forEach(e=>{ if(totals[e.id]) parts.push(`${e.label.replace(/[^\w ]/g,'').trim()}: ${totals[e.id]}`); });
 
-  // Daily averages for week/month
   if(view !== "day" && parts.length){
     const days = view==="week" ? 7 : daysInMonth(anchor);
     const elapsedDays = isCurrentWindow()
@@ -391,6 +523,7 @@ function renderSummary(){
 
 function render(){ renderTimers(); renderEvents(); renderLegend(); renderNav(); renderChart(); renderSummary(); renderLog(); }
 
+// ---- Export / Import CSV ----
 function exportCSV(){
   const csv = "activity,type,start_iso,end_iso,duration_sec\n" + log.map(s=>
     `${s.activity},${s.type},${new Date(s.start).toISOString()},${new Date(s.end).toISOString()},${Math.floor((s.end-s.start)/1000)}`
@@ -398,6 +531,59 @@ function exportCSV(){
   const blob = new Blob([csv],{type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `babylog_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+}
+
+function importCSV(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const text = e.target.result;
+      const lines = text.split(/\r?\n/).filter(l=>l.trim());
+      if(lines.length < 2) throw new Error("Empty file");
+      const header = lines[0].toLowerCase().split(",").map(s=>s.trim());
+      const iAct = header.indexOf("activity");
+      const iType = header.indexOf("type");
+      const iStart = header.indexOf("start_iso");
+      const iEnd = header.indexOf("end_iso");
+      if([iAct,iType,iStart,iEnd].some(x=>x<0)) throw new Error("Missing required columns");
+
+      const imported = [];
+      for(let i=1; i<lines.length; i++){
+        const cols = lines[i].split(",").map(s=>s.trim());
+        const activity = cols[iAct];
+        const type = cols[iType];
+        const start = new Date(cols[iStart]).getTime();
+        const end = new Date(cols[iEnd]).getTime();
+        if(!VALID_IDS.has(activity)) continue;
+        if(type!=="duration" && type!=="event") continue;
+        if(isNaN(start) || isNaN(end)) continue;
+        imported.push({activity, type, start, end});
+      }
+      if(!imported.length) throw new Error("No valid rows found");
+
+      const choice = confirm(`Import ${imported.length} entries.\n\nOK = MERGE with existing (skips duplicates)\nCancel = REPLACE all existing data`);
+      if(choice){
+        const existing = new Set(log.map(s=>`${s.activity}|${s.start}|${s.end}`));
+        let added = 0;
+        imported.forEach(s=>{
+          const k = `${s.activity}|${s.start}|${s.end}`;
+          if(!existing.has(k)){ log.push(s); existing.add(k); added++; }
+        });
+        alert(`Merged: ${added} new entries added.`);
+      } else {
+        if(!confirm("Really REPLACE all current data?")) return;
+        log = imported;
+        alert(`Replaced: ${imported.length} entries loaded.`);
+      }
+      sortLog(); save(); render();
+    } catch(err){
+      alert("Import failed: " + err.message);
+    }
+    ev.target.value = "";
+  };
+  reader.readAsText(file);
 }
 
 render();
