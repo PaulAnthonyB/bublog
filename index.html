@@ -42,7 +42,9 @@
   .tabs{display:flex;background:#e5e7eb;border-radius:10px;padding:3px;margin-bottom:8px}
   .tabs button{flex:1;padding:8px;border:0;background:transparent;font-size:13px;font-weight:600;border-radius:7px;color:#666}
   .tabs button.on{background:white;color:#1c1c1e;box-shadow:0 1px 2px rgba(0,0,0,0.08)}
-  /* Modal */
+  .toptabs{display:flex;background:#1c1c1e;border-radius:12px;padding:4px;margin-bottom:14px}
+  .toptabs button{flex:1;padding:10px;border:0;background:transparent;font-size:14px;font-weight:600;border-radius:8px;color:#999}
+  .toptabs button.on{background:#2563eb;color:white}
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
   .modal-bg.on{display:flex}
   .modal{background:white;border-radius:16px;padding:18px;width:100%;max-width:380px;max-height:90vh;overflow:auto}
@@ -55,44 +57,75 @@
   .modal-actions .save{background:#2563eb;color:white}
   .modal-actions .del{background:#dc2626;color:white;flex:0 0 auto;padding:12px 14px}
   .hint{font-size:11px;color:#999;margin-top:6px}
+  .stat-row{display:flex;justify-content:space-between;padding:6px 0;font-size:14px}
+  .stat-row .v{font-weight:600}
+  section.hidden{display:none}
 </style>
 </head>
 <body>
 
-<h2>Timed activities</h2>
-<div id="timers" class="grid2"></div>
-
-<h2>Events</h2>
-<div id="events" class="grid2"></div>
-
-<h2>Charts</h2>
-<div class="card">
-  <div class="tabs">
-    <button id="tabDay" class="on" onclick="setView('day')">Day</button>
-    <button id="tabWeek" onclick="setView('week')">Week</button>
-    <button id="tabMonth" onclick="setView('month')">Month</button>
-  </div>
-  <div class="nav">
-    <button onclick="shift(-1)">‹</button>
-    <div id="dateLabel"></div>
-    <button onclick="shift(1)" id="nextBtn">›</button>
-  </div>
-  <svg class="chart" id="chart" viewBox="0 0 700 200" preserveAspectRatio="none"></svg>
-  <div class="legend" id="legend"></div>
-  <div id="summary" class="t" style="margin-top:8px"></div>
+<div class="toptabs">
+  <button id="topActivity" class="on" onclick="setTopTab('activity')">Activity</button>
+  <button id="topWeight" onclick="setTopTab('weight')">Weight</button>
 </div>
 
-<h2 id="logHeading">Log</h2>
-<div class="card" id="log"></div>
+<!-- ACTIVITY SECTION -->
+<section id="secActivity">
+  <h2>Timed activities</h2>
+  <div id="timers" class="grid2"></div>
 
+  <h2>Events</h2>
+  <div id="events" class="grid2"></div>
+
+  <h2>Charts</h2>
+  <div class="card">
+    <div class="tabs">
+      <button id="tabDay" class="on" onclick="setView('day')">Day</button>
+      <button id="tabWeek" onclick="setView('week')">Week</button>
+      <button id="tabMonth" onclick="setView('month')">Month</button>
+    </div>
+    <div class="nav">
+      <button onclick="shift(-1)">‹</button>
+      <div id="dateLabel"></div>
+      <button onclick="shift(1)" id="nextBtn">›</button>
+    </div>
+    <svg class="chart" id="chart" viewBox="0 0 700 200" preserveAspectRatio="none"></svg>
+    <div class="legend" id="legend"></div>
+    <div id="summary" class="t" style="margin-top:8px"></div>
+  </div>
+
+  <h2 id="logHeading">Log</h2>
+  <div class="card" id="log"></div>
+
+  <div class="ctrl">
+    <button class="primary" onclick="openAddModal()">+ Add entry</button>
+  </div>
+</section>
+
+<!-- WEIGHT SECTION -->
+<section id="secWeight" class="hidden">
+  <h2>Weight chart</h2>
+  <div class="card">
+    <svg class="chart" id="wChart" viewBox="0 0 700 240" preserveAspectRatio="none"></svg>
+    <div id="wStats" style="margin-top:10px"></div>
+  </div>
+
+  <h2>Weight log</h2>
+  <div class="card" id="wLog"></div>
+
+  <div class="ctrl">
+    <button class="primary" onclick="openWeightModal()">+ Add weight</button>
+  </div>
+</section>
+
+<!-- Global controls -->
 <div class="ctrl">
-  <button class="primary" onclick="openAddModal()">+ Add entry</button>
   <button onclick="exportCSV()">Export CSV</button>
   <button onclick="document.getElementById('importFile').click()">Import CSV</button>
   <input type="file" id="importFile" accept=".csv,text/csv" style="display:none" onchange="importCSV(event)">
 </div>
 
-<!-- Edit / Add modal -->
+<!-- Activity edit/add modal -->
 <div class="modal-bg" id="modal">
   <div class="modal">
     <h3 id="modalTitle">Edit entry</h3>
@@ -118,6 +151,23 @@
   </div>
 </div>
 
+<!-- Weight edit/add modal -->
+<div class="modal-bg" id="wModal">
+  <div class="modal">
+    <h3 id="wModalTitle">Add weight</h3>
+    <label>Date &amp; time</label>
+    <input type="datetime-local" id="wWhen">
+    <label>Weight (kg)</label>
+    <input type="number" id="wKg" step="0.01" min="0" inputmode="decimal" placeholder="e.g. 4.25">
+    <div class="hint" id="wHint"></div>
+    <div class="modal-actions">
+      <button class="cancel" onclick="closeWeightModal()">Cancel</button>
+      <button class="del" id="wDelBtn" onclick="weightDelete()">🗑</button>
+      <button class="save" onclick="weightSave()">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const TIMED = [
   {id:"BreastL", label:"Breast L", color:"#2563eb", cls:"idle"},
@@ -132,11 +182,14 @@ const COLOR = Object.fromEntries([...TIMED,...EVENTS].map(x=>[x.id,x.color]));
 const ALL_ROWS = [...TIMED, ...EVENTS];
 const VALID_IDS = new Set(ALL_ROWS.map(r=>r.id));
 
-let starts = JSON.parse(localStorage.getItem("starts")||"{}");
-let log    = JSON.parse(localStorage.getItem("log")||"[]");
-let view   = "day";
-let anchor = startOfDay(Date.now());
-let editingIdx = null; // null = adding new
+let starts  = JSON.parse(localStorage.getItem("starts")||"{}");
+let log     = JSON.parse(localStorage.getItem("log")||"[]");
+let weights = JSON.parse(localStorage.getItem("weights")||"[]"); // [{t, kg}]
+let view    = "day";
+let anchor  = startOfDay(Date.now());
+let editingIdx = null;
+let editingWeightIdx = null;
+let topTab  = "activity";
 
 function startOfDay(t){const d=new Date(t);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();}
 function startOfWeek(t){const d=new Date(startOfDay(t));const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.getTime();}
@@ -148,9 +201,19 @@ function daysInMonth(t){const d=new Date(t);return new Date(d.getFullYear(),d.ge
 function save(){
   localStorage.setItem("starts",JSON.stringify(starts));
   localStorage.setItem("log",JSON.stringify(log));
+  localStorage.setItem("weights",JSON.stringify(weights));
 }
-
 function sortLog(){ log.sort((a,b)=> a.start - b.start); }
+function sortWeights(){ weights.sort((a,b)=> a.t - b.t); }
+
+function setTopTab(t){
+  topTab = t;
+  document.getElementById("topActivity").classList.toggle("on", t==="activity");
+  document.getElementById("topWeight").classList.toggle("on", t==="weight");
+  document.getElementById("secActivity").classList.toggle("hidden", t!=="activity");
+  document.getElementById("secWeight").classList.toggle("hidden", t!=="weight");
+  if(t==="weight") renderWeight();
+}
 
 function setView(v){
   view = v;
@@ -171,19 +234,15 @@ function shift(n){
 function toggleTimer(id){
   if(starts[id]){
     log.push({activity:id,start:starts[id],end:Date.now(),type:"duration"});
-    delete starts[id];
-    sortLog();
-  } else {
-    starts[id]=Date.now();
-  }
+    delete starts[id]; sortLog();
+  } else { starts[id]=Date.now(); }
   save(); render();
 }
 
 function logEvent(id){
   const now = Date.now();
   log.push({activity:id,start:now,end:now,type:"event"});
-  sortLog();
-  save(); render();
+  sortLog(); save(); render();
 }
 
 function fmtTime(t){return new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});}
@@ -193,105 +252,85 @@ function fmtMonth(t){return new Date(t).toLocaleDateString([], {month:"long", ye
 function dur(a,b){const s=Math.floor((b-a)/1000);const m=Math.floor(s/60);return m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m ${s%60}s`;}
 function durShort(ms){const m=Math.floor(ms/60000);return m>=60?`${Math.floor(m/60)}h${m%60?` ${m%60}m`:''}`:`${m}m`;}
 
-// ---- Modal (edit / add) ----
-function tsToLocal(ts){
-  const d = new Date(ts);
-  const pad = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function localToTs(s){ return new Date(s).getTime(); }
+// ---- Activity modal ----
+function tsToLocal(ts){const d=new Date(ts);const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;}
+function localToTs(s){return new Date(s).getTime();}
+function populateActivities(){document.getElementById("mActivity").innerHTML = ALL_ROWS.map(r=>`<option value="${r.id}">${r.label}</option>`).join("");}
+function openModal(){document.getElementById("modal").classList.add("on");syncTypeUI();}
+function closeModal(){document.getElementById("modal").classList.remove("on");editingIdx=null;}
+function syncTypeUI(){const type=document.getElementById("mType").value;document.getElementById("endWrap").style.display=type==="event"?"none":"block";updateDurHint();}
+function updateDurHint(){const type=document.getElementById("mType").value;if(type==="event"){document.getElementById("durHint").textContent="";return;}const a=localToTs(document.getElementById("mStart").value);const b=localToTs(document.getElementById("mEnd").value);if(!isNaN(a)&&!isNaN(b)&&b>a)document.getElementById("durHint").textContent=`Duration: ${dur(a,b)}`;else document.getElementById("durHint").textContent=b<=a?"End must be after start":"";}
+function openEditModal(idx){const s=log[idx];if(!s)return;editingIdx=idx;populateActivities();document.getElementById("modalTitle").textContent="Edit entry";document.getElementById("mActivity").value=s.activity;document.getElementById("mType").value=s.type;document.getElementById("mStart").value=tsToLocal(s.start);document.getElementById("mEnd").value=tsToLocal(s.end);document.getElementById("mDelBtn").style.display="block";openModal();}
+function openAddModal(){editingIdx=null;populateActivities();document.getElementById("modalTitle").textContent="Add entry";document.getElementById("mActivity").value="BreastL";document.getElementById("mType").value="duration";const now=Date.now();document.getElementById("mStart").value=tsToLocal(now-10*60000);document.getElementById("mEnd").value=tsToLocal(now);document.getElementById("mDelBtn").style.display="none";openModal();}
+function modalSave(){const activity=document.getElementById("mActivity").value;const type=document.getElementById("mType").value;const start=localToTs(document.getElementById("mStart").value);if(isNaN(start)){alert("Invalid start time");return;}let end=start;if(type==="duration"){end=localToTs(document.getElementById("mEnd").value);if(isNaN(end)||end<=start){alert("End must be after start");return;}}const entry={activity,type,start,end};if(editingIdx===null)log.push(entry);else log[editingIdx]=entry;sortLog();save();closeModal();render();}
+function modalDelete(){if(editingIdx===null)return;if(!confirm("Delete this entry?"))return;log.splice(editingIdx,1);save();closeModal();render();}
 
-function populateActivities(){
-  document.getElementById("mActivity").innerHTML = ALL_ROWS.map(r=>
-    `<option value="${r.id}">${r.label}</option>`
-  ).join("");
+// ---- Weight modal ----
+function openWeightModal(){
+  editingWeightIdx = null;
+  document.getElementById("wModalTitle").textContent = "Add weight";
+  document.getElementById("wWhen").value = tsToLocal(Date.now());
+  document.getElementById("wKg").value = "";
+  document.getElementById("wDelBtn").style.display = "none";
+  document.getElementById("wHint").textContent = "";
+  document.getElementById("wModal").classList.add("on");
+  updateWeightHint();
 }
-
-function openModal(){
-  document.getElementById("modal").classList.add("on");
-  syncTypeUI();
+function openWeightEdit(idx){
+  const w = weights[idx]; if(!w) return;
+  editingWeightIdx = idx;
+  document.getElementById("wModalTitle").textContent = "Edit weight";
+  document.getElementById("wWhen").value = tsToLocal(w.t);
+  document.getElementById("wKg").value = w.kg;
+  document.getElementById("wDelBtn").style.display = "block";
+  document.getElementById("wModal").classList.add("on");
+  updateWeightHint();
 }
-
-function closeModal(){
-  document.getElementById("modal").classList.remove("on");
-  editingIdx = null;
-}
-
-function syncTypeUI(){
-  const type = document.getElementById("mType").value;
-  document.getElementById("endWrap").style.display = type==="event" ? "none" : "block";
-  updateDurHint();
-}
-
-function updateDurHint(){
-  const type = document.getElementById("mType").value;
-  if(type==="event"){ document.getElementById("durHint").textContent = ""; return; }
-  const a = localToTs(document.getElementById("mStart").value);
-  const b = localToTs(document.getElementById("mEnd").value);
-  if(!isNaN(a) && !isNaN(b) && b>a) document.getElementById("durHint").textContent = `Duration: ${dur(a,b)}`;
-  else document.getElementById("durHint").textContent = b<=a ? "End must be after start" : "";
-}
-
-function openEditModal(idx){
-  const s = log[idx];
-  if(!s) return;
-  editingIdx = idx;
-  populateActivities();
-  document.getElementById("modalTitle").textContent = "Edit entry";
-  document.getElementById("mActivity").value = s.activity;
-  document.getElementById("mType").value = s.type;
-  document.getElementById("mStart").value = tsToLocal(s.start);
-  document.getElementById("mEnd").value = tsToLocal(s.end);
-  document.getElementById("mDelBtn").style.display = "block";
-  openModal();
-}
-
-function openAddModal(){
-  editingIdx = null;
-  populateActivities();
-  document.getElementById("modalTitle").textContent = "Add entry";
-  document.getElementById("mActivity").value = "BreastL";
-  document.getElementById("mType").value = "duration";
-  const now = Date.now();
-  document.getElementById("mStart").value = tsToLocal(now - 10*60000);
-  document.getElementById("mEnd").value = tsToLocal(now);
-  document.getElementById("mDelBtn").style.display = "none";
-  openModal();
-}
-
-function modalSave(){
-  const activity = document.getElementById("mActivity").value;
-  const type = document.getElementById("mType").value;
-  const start = localToTs(document.getElementById("mStart").value);
-  if(isNaN(start)){ alert("Invalid start time"); return; }
-  let end = start;
-  if(type==="duration"){
-    end = localToTs(document.getElementById("mEnd").value);
-    if(isNaN(end) || end<=start){ alert("End must be after start"); return; }
+function closeWeightModal(){document.getElementById("wModal").classList.remove("on");editingWeightIdx=null;}
+function updateWeightHint(){
+  const kg = parseFloat(document.getElementById("wKg").value);
+  const t = localToTs(document.getElementById("wWhen").value);
+  if(isNaN(kg) || isNaN(t)){ document.getElementById("wHint").textContent=""; return; }
+  // find nearest prior weight
+  const prior = weights.filter((w,i)=> i!==editingWeightIdx && w.t < t).sort((a,b)=> b.t - a.t)[0];
+  if(prior){
+    const d = (kg - prior.kg);
+    const days = (t - prior.t) / (24*3600*1000);
+    const sign = d>=0?"+":"";
+    document.getElementById("wHint").textContent = `${sign}${d.toFixed(2)} kg over ${days.toFixed(1)} days vs previous`;
+  } else {
+    document.getElementById("wHint").textContent = "First entry";
   }
-  const entry = {activity, type, start, end};
-  if(editingIdx===null) log.push(entry);
-  else log[editingIdx] = entry;
-  sortLog();
-  save(); closeModal(); render();
 }
-
-function modalDelete(){
-  if(editingIdx===null) return;
-  if(!confirm("Delete this entry?")) return;
-  log.splice(editingIdx,1);
-  save(); closeModal(); render();
+function weightSave(){
+  const kg = parseFloat(document.getElementById("wKg").value);
+  const t = localToTs(document.getElementById("wWhen").value);
+  if(isNaN(kg) || kg<=0){ alert("Enter a valid weight in kg"); return; }
+  if(isNaN(t)){ alert("Invalid date/time"); return; }
+  const entry = {t, kg};
+  if(editingWeightIdx===null) weights.push(entry);
+  else weights[editingWeightIdx] = entry;
+  sortWeights(); save(); closeWeightModal(); renderWeight();
+}
+function weightDelete(){
+  if(editingWeightIdx===null) return;
+  if(!confirm("Delete this weight entry?")) return;
+  weights.splice(editingWeightIdx,1);
+  save(); closeWeightModal(); renderWeight();
 }
 
 document.addEventListener("change", e=>{
   if(e.target.id==="mType") syncTypeUI();
   if(e.target.id==="mStart" || e.target.id==="mEnd") updateDurHint();
+  if(e.target.id==="wWhen" || e.target.id==="wKg") updateWeightHint();
 });
-document.getElementById("modal").addEventListener("click", e=>{
-  if(e.target.id==="modal") closeModal();
+document.addEventListener("input", e=>{
+  if(e.target.id==="wKg") updateWeightHint();
 });
+document.getElementById("modal").addEventListener("click", e=>{ if(e.target.id==="modal") closeModal(); });
+document.getElementById("wModal").addEventListener("click", e=>{ if(e.target.id==="wModal") closeWeightModal(); });
 
-// ---- Render ----
+// ---- Activity render ----
 function renderTimers(){
   document.getElementById("timers").innerHTML = TIMED.map(t=>{
     const on = starts[t.id];
@@ -301,51 +340,43 @@ function renderTimers(){
     return `<button class="timer-btn ${cls}${t.full?' full':''}" onclick="toggleTimer('${t.id}')">${main}${sub}</button>`;
   }).join("");
 }
-
 function renderEvents(){
   document.getElementById("events").innerHTML = EVENTS.map(e=>
     `<button class="event-btn ${e.cls}" onclick="logEvent('${e.id}')">${e.label}</button>`
   ).join("");
 }
-
 function renderLegend(){
   document.getElementById("legend").innerHTML = ALL_ROWS.map(r=>
     `<span><i class="swatch" style="background:${r.color}"></i>${r.label.replace(/^[^\w]+/,'')}</span>`
   ).join("");
 }
-
 function windowRange(){
   if(view==="day") return [anchor, addDays(anchor,1)];
   if(view==="week") return [anchor, addDays(anchor,7)];
   return [anchor, addMonths(anchor,1)];
 }
-
 function isCurrentWindow(){
   const [s] = windowRange();
   if(view==="day") return s === startOfDay(Date.now());
   if(view==="week") return s === startOfWeek(Date.now());
   return s === startOfMonth(Date.now());
 }
-
 function entriesInWindow(){
   const [s,e] = windowRange();
   return log.map((x,i)=>({s:x,i})).filter(({s:x})=> x.end >= s && x.start < e);
 }
-
 function durationOnDay(entry, dayStart){
   const dayEnd = addDays(dayStart, 1);
   const a = Math.max(entry.start, dayStart);
   const b = Math.min(entry.end, dayEnd);
   return Math.max(0, b-a);
 }
-
 function renderChart(){
   const svg = document.getElementById("chart");
   if(view==="day") return renderDayChart(svg);
   if(view==="week") return renderRangeChart(svg, 7);
   renderRangeChart(svg, daysInMonth(anchor));
 }
-
 function renderDayChart(svg){
   const W=700, padL=40, padR=10, padT=10, padB=30;
   const innerW = W-padL-padR;
@@ -353,11 +384,9 @@ function renderDayChart(svg){
   const rows = ALL_ROWS;
   const totalH = padT + rows.length*rowH + padB;
   svg.setAttribute("viewBox", `0 0 ${W} ${totalH}`);
-
   const dayStart = anchor;
   const dayEnd = addDays(dayStart,1);
   const xOf = t => padL + ((Math.max(dayStart,Math.min(dayEnd,t)) - dayStart)/(24*3600*1000))*innerW;
-
   let html = "";
   for(let h=0; h<=24; h+=3){
     const x = padL + (h/24)*innerW;
@@ -375,11 +404,8 @@ function renderDayChart(svg){
     const y = padT + rowIdx*rowH + 4;
     const h = rowH - 8;
     const x1 = xOf(s.start), x2 = xOf(s.end);
-    if(s.type==="event"){
-      html += `<circle cx="${x1}" cy="${y+h/2}" r="5" fill="${COLOR[s.activity]}"/>`;
-    } else {
-      html += `<rect x="${x1}" y="${y}" width="${Math.max(2,x2-x1)}" height="${h}" rx="3" fill="${COLOR[s.activity]}"/>`;
-    }
+    if(s.type==="event") html += `<circle cx="${x1}" cy="${y+h/2}" r="5" fill="${COLOR[s.activity]}"/>`;
+    else html += `<rect x="${x1}" y="${y}" width="${Math.max(2,x2-x1)}" height="${h}" rx="3" fill="${COLOR[s.activity]}"/>`;
   });
   if(isCurrentWindow()){
     Object.entries(starts).forEach(([id,t])=>{
@@ -395,7 +421,6 @@ function renderDayChart(svg){
   }
   svg.innerHTML = html;
 }
-
 function renderRangeChart(svg, nDays){
   const W=700, padL=40, padR=10, padT=10, padB=40;
   const innerW = W-padL-padR;
@@ -403,31 +428,22 @@ function renderRangeChart(svg, nDays){
   const eventArea = 50;
   const totalH = padT + barArea + eventArea + padB;
   svg.setAttribute("viewBox", `0 0 ${W} ${totalH}`);
-
   const days = [];
   for(let i=0;i<nDays;i++){
     const dStart = addDays(anchor, i);
     const bucket = {date:dStart, BreastL:0, BreastR:0, Nap:0, Poo:0, Wee:0};
     log.forEach(s=>{
-      if(s.type==="duration"){
-        bucket[s.activity] = (bucket[s.activity]||0) + durationOnDay(s, dStart);
-      } else {
-        if(s.start >= dStart && s.start < addDays(dStart,1)){
-          bucket[s.activity] = (bucket[s.activity]||0) + 1;
-        }
-      }
+      if(s.type==="duration") bucket[s.activity] = (bucket[s.activity]||0) + durationOnDay(s, dStart);
+      else if(s.start >= dStart && s.start < addDays(dStart,1)) bucket[s.activity] = (bucket[s.activity]||0) + 1;
     });
     days.push(bucket);
   }
-
   const maxDur = Math.max(1, ...days.map(d=> d.BreastL + d.BreastR + d.Nap));
   const maxHours = Math.max(1, Math.ceil(maxDur/3600000));
   const yOf = ms => padT + barArea - (ms/(maxHours*3600000))*barArea;
-
   const barW = innerW/nDays;
   const innerBarW = Math.max(4, barW*0.7);
   const barOffset = (barW - innerBarW)/2;
-
   let html = "";
   const step = maxHours <= 4 ? 1 : maxHours <= 12 ? 2 : 4;
   for(let h=0; h<=maxHours; h+=step){
@@ -435,40 +451,29 @@ function renderRangeChart(svg, nDays){
     html += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e5e7eb"/>`;
     html += `<text x="${padL-4}" y="${y+3}" font-size="9" text-anchor="end" fill="#666">${h}h</text>`;
   }
-
   days.forEach((d,i)=>{
     const x = padL + i*barW + barOffset;
     let yCursor = padT + barArea;
     [["BreastL",COLOR.BreastL],["BreastR",COLOR.BreastR],["Nap",COLOR.Nap]].forEach(([k,c])=>{
       const h = (d[k]/(maxHours*3600000))*barArea;
-      if(h>0){
-        yCursor -= h;
-        html += `<rect x="${x}" y="${yCursor}" width="${innerBarW}" height="${h}" fill="${c}"/>`;
-      }
+      if(h>0){ yCursor -= h; html += `<rect x="${x}" y="${yCursor}" width="${innerBarW}" height="${h}" fill="${c}"/>`; }
     });
     const xc = padL + i*barW + barW/2;
-    const lbl = view==="week"
-      ? new Date(d.date).toLocaleDateString([], {weekday:"short"})
-      : String(new Date(d.date).getDate());
-    if(view==="week" || i%Math.ceil(nDays/15)===0){
-      html += `<text x="${xc}" y="${padT+barArea+12}" font-size="9" text-anchor="middle" fill="#666">${lbl}</text>`;
-    }
+    const lbl = view==="week" ? new Date(d.date).toLocaleDateString([], {weekday:"short"}) : String(new Date(d.date).getDate());
+    if(view==="week" || i%Math.ceil(nDays/15)===0) html += `<text x="${xc}" y="${padT+barArea+12}" font-size="9" text-anchor="middle" fill="#666">${lbl}</text>`;
     const evY = padT + barArea + 20;
     if(d.Poo) html += `<circle cx="${xc-5}" cy="${evY}" r="3.5" fill="${COLOR.Poo}"/><text x="${xc-5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${d.Poo}</text>`;
     if(d.Wee) html += `<circle cx="${xc+5}" cy="${evY}" r="3.5" fill="${COLOR.Wee}"/><text x="${xc+5}" y="${evY+12}" font-size="8" text-anchor="middle" fill="#666">${d.Wee}</text>`;
   });
-
   html += `<text x="${padL}" y="${totalH-4}" font-size="9" fill="#666">Bars: hours of feed (L+R) & nap · Dots: poo/wee counts</text>`;
   svg.innerHTML = html;
 }
-
 function renderLog(){
   let heading;
   if(view==="day") heading = isCurrentWindow() ? "Today's log" : `Log — ${fmtDate(anchor)}`;
   else if(view==="week"){ const [s,e]=windowRange(); heading = `Log — ${fmtDateShort(s)} to ${fmtDateShort(e-1)}`; }
   else heading = `Log — ${fmtMonth(anchor)}`;
   document.getElementById("logHeading").textContent = heading;
-
   const rows = entriesInWindow().reverse();
   document.getElementById("log").innerHTML = rows.length ? rows.map(({s,i})=>{
     const showDate = view !== "day";
@@ -481,7 +486,6 @@ function renderLog(){
     </div>`;
   }).join("") : '<div class="t">No entries</div>';
 }
-
 function renderNav(){
   let label;
   if(view==="day") label = isCurrentWindow() ? `Today · ${fmtDate(anchor)}` : fmtDate(anchor);
@@ -490,7 +494,6 @@ function renderNav(){
   document.getElementById("dateLabel").textContent = label;
   document.getElementById("nextBtn").disabled = isCurrentWindow();
 }
-
 function renderSummary(){
   const entries = entriesInWindow().map(x=>x.s);
   const totals = {};
@@ -499,19 +502,14 @@ function renderSummary(){
     if(s.type==="duration"){
       const a = Math.max(s.start, winS), b = Math.min(s.end, winE);
       totals[s.activity] = (totals[s.activity]||0) + Math.max(0,b-a);
-    } else {
-      totals[s.activity] = (totals[s.activity]||0) + 1;
-    }
+    } else { totals[s.activity] = (totals[s.activity]||0) + 1; }
   });
   const parts = [];
   TIMED.forEach(t=>{ if(totals[t.id]) parts.push(`${t.label}: ${durShort(totals[t.id])}`); });
   EVENTS.forEach(e=>{ if(totals[e.id]) parts.push(`${e.label.replace(/[^\w ]/g,'').trim()}: ${totals[e.id]}`); });
-
   if(view !== "day" && parts.length){
     const days = view==="week" ? 7 : daysInMonth(anchor);
-    const elapsedDays = isCurrentWindow()
-      ? Math.min(days, Math.ceil((Date.now()-winS)/(24*3600*1000)))
-      : days;
+    const elapsedDays = isCurrentWindow() ? Math.min(days, Math.ceil((Date.now()-winS)/(24*3600*1000))) : days;
     const avgParts = [];
     TIMED.forEach(t=>{ if(totals[t.id]) avgParts.push(`${t.label.split(' ').pop()[0]}:${durShort(totals[t.id]/elapsedDays)}`); });
     EVENTS.forEach(e=>{ if(totals[e.id]) avgParts.push(`${e.label.replace(/[^\w ]/g,'').trim()[0]}:${(totals[e.id]/elapsedDays).toFixed(1)}`); });
@@ -520,14 +518,118 @@ function renderSummary(){
   }
   document.getElementById("summary").textContent = parts.join(" · ") || "No activity";
 }
-
 function render(){ renderTimers(); renderEvents(); renderLegend(); renderNav(); renderChart(); renderSummary(); renderLog(); }
 
-// ---- Export / Import CSV ----
+// ---- Weight render ----
+function renderWeight(){ renderWeightChart(); renderWeightStats(); renderWeightLog(); }
+
+function renderWeightChart(){
+  const svg = document.getElementById("wChart");
+  const W=700, padL=44, padR=14, padT=14, padB=34;
+  const H=240;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  if(weights.length < 1){ svg.innerHTML = `<text x="${W/2}" y="${H/2}" font-size="12" text-anchor="middle" fill="#999">No weight entries yet</text>`; return; }
+  const ws = weights.slice().sort((a,b)=> a.t - b.t);
+  const tMin = ws[0].t;
+  const tMax = ws[ws.length-1].t === tMin ? tMin + 24*3600*1000 : ws[ws.length-1].t;
+  const kgs = ws.map(w=>w.kg);
+  let kMin = Math.min(...kgs), kMax = Math.max(...kgs);
+  if(kMin === kMax){ kMin -= 0.5; kMax += 0.5; }
+  const pad = (kMax-kMin)*0.1;
+  kMin -= pad; kMax += pad;
+  const xOf = t => padL + ((t - tMin)/(tMax - tMin))*(W - padL - padR);
+  const yOf = k => padT + (1 - (k - kMin)/(kMax - kMin))*(H - padT - padB);
+
+  let html = "";
+  // y gridlines
+  const yTicks = 4;
+  for(let i=0;i<=yTicks;i++){
+    const k = kMin + (kMax-kMin)*i/yTicks;
+    const y = yOf(k);
+    html += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#e5e7eb"/>`;
+    html += `<text x="${padL-4}" y="${y+3}" font-size="9" text-anchor="end" fill="#666">${k.toFixed(2)}</text>`;
+  }
+  // x ticks (start, mid, end)
+  [tMin, (tMin+tMax)/2, tMax].forEach(t=>{
+    const x = xOf(t);
+    html += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="#f3f4f6"/>`;
+    html += `<text x="${x}" y="${H-padB+14}" font-size="9" text-anchor="middle" fill="#666">${fmtDateShort(t)}</text>`;
+  });
+  // line
+  if(ws.length > 1){
+    const path = ws.map((w,i)=> `${i===0?'M':'L'}${xOf(w.t).toFixed(1)},${yOf(w.kg).toFixed(1)}`).join(" ");
+    html += `<path d="${path}" fill="none" stroke="#2563eb" stroke-width="2"/>`;
+  }
+  // points
+  ws.forEach(w=>{
+    html += `<circle cx="${xOf(w.t)}" cy="${yOf(w.kg)}" r="4" fill="#2563eb" stroke="white" stroke-width="1.5"/>`;
+  });
+  html += `<text x="${padL}" y="${H-4}" font-size="9" fill="#666">Weight (kg) over time</text>`;
+  svg.innerHTML = html;
+}
+
+function renderWeightStats(){
+  const el = document.getElementById("wStats");
+  if(!weights.length){ el.innerHTML = '<div class="t">Add a weight entry to see stats</div>'; return; }
+  const ws = weights.slice().sort((a,b)=> a.t - b.t);
+  const first = ws[0], last = ws[ws.length-1];
+  const totalDays = (last.t - first.t)/(24*3600*1000);
+  const totalGain = last.kg - first.kg;
+  const avgPerDay = totalDays > 0 ? (totalGain/totalDays) : 0;
+  const avgPerWeek = avgPerDay * 7;
+  // last 7-day rate
+  const sevenAgo = last.t - 7*24*3600*1000;
+  const recent = ws.filter(w=> w.t >= sevenAgo);
+  let recentRate = "—";
+  if(recent.length >= 2){
+    const a = recent[0], b = recent[recent.length-1];
+    const days = (b.t - a.t)/(24*3600*1000);
+    if(days > 0) recentRate = `${((b.kg - a.kg)/days*7).toFixed(2)} kg/wk`;
+  }
+  el.innerHTML = `
+    <div class="stat-row"><span>Latest</span><span class="v">${last.kg.toFixed(2)} kg · ${fmtDateShort(last.t)}</span></div>
+    <div class="stat-row"><span>Total change</span><span class="v">${totalGain>=0?'+':''}${totalGain.toFixed(2)} kg over ${totalDays.toFixed(1)} d</span></div>
+    <div class="stat-row"><span>Avg gain</span><span class="v">${(avgPerWeek>=0?'+':'')}${avgPerWeek.toFixed(2)} kg/wk</span></div>
+    <div class="stat-row"><span>Last 7 days</span><span class="v">${recentRate}</span></div>
+  `;
+}
+
+function renderWeightLog(){
+  const el = document.getElementById("wLog");
+  if(!weights.length){ el.innerHTML = '<div class="t">No entries</div>'; return; }
+  const ws = weights.map((w,i)=>({w,i})).sort((a,b)=> b.w.t - a.w.t);
+  el.innerHTML = ws.map(({w,i}, j)=>{
+    // find previous (older) entry's index in sorted-by-time
+    const sortedAsc = weights.slice().sort((a,b)=> a.t - b.t);
+    const pos = sortedAsc.findIndex(x=> x.t===w.t && x.kg===w.kg);
+    const prev = pos > 0 ? sortedAsc[pos-1] : null;
+    let delta = "";
+    if(prev){
+      const d = w.kg - prev.kg;
+      const sign = d>=0?"+":"";
+      delta = `<span style="color:${d>=0?'#10b981':'#dc2626'}">${sign}${d.toFixed(2)} kg</span>`;
+    }
+    return `<div class="row">
+      <div class="row-info">
+        <div class="act">${w.kg.toFixed(2)} kg ${delta}</div>
+        <div class="t">${fmtDate(w.t)} ${fmtTime(w.t)}</div>
+      </div>
+      <button class="icon-btn" onclick="openWeightEdit(${i})" aria-label="Edit">✎</button>
+    </div>`;
+  }).join("");
+}
+
+// ---- Export / Import CSV (single file, two sections) ----
 function exportCSV(){
-  const csv = "activity,type,start_iso,end_iso,duration_sec\n" + log.map(s=>
-    `${s.activity},${s.type},${new Date(s.start).toISOString()},${new Date(s.end).toISOString()},${Math.floor((s.end-s.start)/1000)}`
-  ).join("\n");
+  // kind=activity columns: activity,type,start_iso,end_iso,duration_sec
+  // kind=weight columns: t_iso, kg (placed in start_iso + duration_sec)
+  let csv = "kind,activity,type,start_iso,end_iso,duration_sec,kg\n";
+  log.forEach(s=>{
+    csv += `activity,${s.activity},${s.type},${new Date(s.start).toISOString()},${new Date(s.end).toISOString()},${Math.floor((s.end-s.start)/1000)},\n`;
+  });
+  weights.forEach(w=>{
+    csv += `weight,,,${new Date(w.t).toISOString()},,,${w.kg}\n`;
+  });
   const blob = new Blob([csv],{type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `babylog_${new Date().toISOString().slice(0,10)}.csv`; a.click();
@@ -543,41 +645,49 @@ function importCSV(ev){
       const lines = text.split(/\r?\n/).filter(l=>l.trim());
       if(lines.length < 2) throw new Error("Empty file");
       const header = lines[0].toLowerCase().split(",").map(s=>s.trim());
-      const iAct = header.indexOf("activity");
-      const iType = header.indexOf("type");
-      const iStart = header.indexOf("start_iso");
-      const iEnd = header.indexOf("end_iso");
-      if([iAct,iType,iStart,iEnd].some(x=>x<0)) throw new Error("Missing required columns");
+      const hasKind = header.includes("kind");
+      const col = name => header.indexOf(name);
+      const iKind = col("kind"), iAct = col("activity"), iType = col("type"),
+            iStart = col("start_iso"), iEnd = col("end_iso"), iKg = col("kg");
 
-      const imported = [];
+      const impActs = [], impWts = [];
       for(let i=1; i<lines.length; i++){
         const cols = lines[i].split(",").map(s=>s.trim());
-        const activity = cols[iAct];
-        const type = cols[iType];
-        const start = new Date(cols[iStart]).getTime();
-        const end = new Date(cols[iEnd]).getTime();
-        if(!VALID_IDS.has(activity)) continue;
-        if(type!=="duration" && type!=="event") continue;
-        if(isNaN(start) || isNaN(end)) continue;
-        imported.push({activity, type, start, end});
+        const kind = hasKind ? cols[iKind] : "activity"; // backward compat with old exports
+        if(kind === "activity"){
+          const activity = cols[iAct];
+          const type = cols[iType];
+          const start = new Date(cols[iStart]).getTime();
+          const end = new Date(cols[iEnd]).getTime();
+          if(!VALID_IDS.has(activity)) continue;
+          if(type!=="duration" && type!=="event") continue;
+          if(isNaN(start) || isNaN(end)) continue;
+          impActs.push({activity, type, start, end});
+        } else if(kind === "weight"){
+          const t = new Date(cols[iStart]).getTime();
+          const kg = parseFloat(cols[iKg]);
+          if(isNaN(t) || isNaN(kg) || kg<=0) continue;
+          impWts.push({t, kg});
+        }
       }
-      if(!imported.length) throw new Error("No valid rows found");
+      if(!impActs.length && !impWts.length) throw new Error("No valid rows found");
 
-      const choice = confirm(`Import ${imported.length} entries.\n\nOK = MERGE with existing (skips duplicates)\nCancel = REPLACE all existing data`);
+      const msg = `Import ${impActs.length} activity + ${impWts.length} weight entries.\n\nOK = MERGE with existing (skips duplicates)\nCancel = REPLACE all existing data`;
+      const choice = confirm(msg);
       if(choice){
-        const existing = new Set(log.map(s=>`${s.activity}|${s.start}|${s.end}`));
-        let added = 0;
-        imported.forEach(s=>{
-          const k = `${s.activity}|${s.start}|${s.end}`;
-          if(!existing.has(k)){ log.push(s); existing.add(k); added++; }
-        });
-        alert(`Merged: ${added} new entries added.`);
+        const exA = new Set(log.map(s=>`${s.activity}|${s.start}|${s.end}`));
+        const exW = new Set(weights.map(w=>`${w.t}|${w.kg}`));
+        let aN=0, wN=0;
+        impActs.forEach(s=>{ const k=`${s.activity}|${s.start}|${s.end}`; if(!exA.has(k)){ log.push(s); exA.add(k); aN++; } });
+        impWts.forEach(w=>{ const k=`${w.t}|${w.kg}`; if(!exW.has(k)){ weights.push(w); exW.add(k); wN++; } });
+        alert(`Merged: ${aN} activity, ${wN} weight entries added.`);
       } else {
         if(!confirm("Really REPLACE all current data?")) return;
-        log = imported;
-        alert(`Replaced: ${imported.length} entries loaded.`);
+        log = impActs; weights = impWts;
+        alert(`Replaced: ${impActs.length} activity, ${impWts.length} weight entries.`);
       }
-      sortLog(); save(); render();
+      sortLog(); sortWeights(); save();
+      render(); renderWeight();
     } catch(err){
       alert("Import failed: " + err.message);
     }
